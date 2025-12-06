@@ -3,6 +3,31 @@ import math
 
 class Tensor:
 
+    def backward(self):
+        if len(self.data) != 1:
+            raise ValueError("len(self.data) != 1, backward()")
+        if self.requires_grad == False:
+            return
+
+        topo = []
+
+        visited = []
+
+        def dfs(t):
+            if t in visited:
+                return
+            visited.append(t)
+            for parent in t._prev:
+                dfs(parent)
+            topo.append(t)
+
+        dfs(self)
+
+        self.grad[0] = 1.0
+
+        for t in topo[::-1]:
+            t._backward()
+
     def garbage_float_array(shape):   # I know making this is kinda useless but the garbage collector can deal with it
         if len(shape) == 0:
             return random.uniform(-1e-2, 1e-2)
@@ -47,6 +72,10 @@ class Tensor:
         self.data = Tensor.flatten(Tensor.garbage_float_array(shape))
         self.shape = shape
         self.strides = Tensor.making_strides(self.shape)
+        self.requires_grad = False
+        self.grad = [0.0] * len(self.data)
+        self._prev = []
+        self._backward = lambda: None
 
 def add_tensors(t1, t2):
     if t1.shape != t2.shape:
@@ -55,7 +84,21 @@ def add_tensors(t1, t2):
     t3 = Tensor(t1.shape)
     for i in range(len(t1.data)):
         t3.data[i] = t1.data[i] + t2.data[i]
+    t3._prev = [t1, t2]
+    if True == t1.requires_grad or t2.requires_grad:
+        t3.requires_grad = True
+
+    def _backward():
+        if t1.requires_grad == True:
+            for i in range(len(t3.data)):
+                t1.grad[i] += t3.grad[i] * 1
+        if t2.requires_grad == True:
+            for i in range(len(t3.data)):
+                t2.grad[i] += t3.grad[i] * 1
+
+    t3._backward = _backward
     return t3
+
 
 def sub_tensors(t1, t2):
     if t1.shape != t2.shape:
