@@ -85,14 +85,14 @@ def add_tensors(t1, t2):
     for i in range(len(t1.data)):
         t3.data[i] = t1.data[i] + t2.data[i]
     t3._prev = [t1, t2]
-    if True == t1.requires_grad or t2.requires_grad:
+    if t1.requires_grad or t2.requires_grad:
         t3.requires_grad = True
 
     def _backward():
-        if t1.requires_grad == True:
+        if t1.requires_grad:
             for i in range(len(t3.data)):
                 t1.grad[i] += t3.grad[i] * 1
-        if t2.requires_grad == True:
+        if t2.requires_grad:
             for i in range(len(t3.data)):
                 t2.grad[i] += t3.grad[i] * 1
 
@@ -106,12 +106,41 @@ def sub_tensors(t1, t2):
     t3 = Tensor(t1.shape)
     for i in range(len(t1.data)):
         t3.data[i] = t1.data[i] - t2.data[i]
+    t3._prev = [t1, t2]
+    if t1.requires_grad or t2.requires_grad:
+        t3.requires_grad = True
+
+    def _backward():
+        if t1.requires_grad:
+            for i in range(len(t3.data)):
+                t1.grad[i] += t3.grad[i] * 1
+        if t2.requires_grad:
+            for i in range(len(t3.data)):
+                t2.grad[i] += t3.grad[i] * -1
+
+    t3._backward = _backward
     return t3
 
 def mul_tensors(t1, t2):
+    if t1.shape != t2.shape:
+        raise ValueError("Size must be same for both tensors")
     t3 = Tensor(t1.shape)
     for i in range(len(t1.data)):
         t3.data[i] = t1.data[i] * t2.data[i]
+    t3._prev = [t1, t2]
+
+    if t1.requires_grad or t2.requires_grad:
+        t3.requires_grad = True
+
+    def _backward():
+        if t1.requires_grad:
+            for i in range(len(t3.data)):
+                t1.grad[i] += t3.grad[i] * t2.data[i]
+        if t2.requires_grad:
+            for i in range(len(t3.data)):
+                t2.grad[i] += t3.grad[i] * t1.data[i]
+
+    t3._backward = _backward
     return t3
 
 def add_scalar_tensor(t1, s1):
@@ -226,6 +255,15 @@ def relu(t):
             t2.data[i] = 0
         else:
             t2.data[i] = t.data[i]
+    t2._prev = [t]
+    t2.requires_grad = t.requires_grad
+
+    def _backward():
+        for i in range(len(t.data)):
+            if t.data[i] > 0:
+                t.grad[i] += t2.grad[i]
+
+    t2._backward = _backward
     return t2
 
 class FeedForward:
